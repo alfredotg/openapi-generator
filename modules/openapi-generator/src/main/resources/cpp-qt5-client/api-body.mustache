@@ -4,6 +4,8 @@
 
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QEventLoop>
+#include <QDebug>
 
 {{#cppNamespaceDeclarations}}
 namespace {{this}} {
@@ -66,6 +68,39 @@ void {{classname}}::abortRequests(){
     emit abortRequestsSignal();
 }
 
+template <typename Type>
+QString serializeCollection(const Type& collection, const QString& baseName, const QString& style) {
+    QString param;
+    if (style.indexOf("multi") == 0) {
+        foreach (auto t, collection) {
+            param.append(baseName).append("=").append(::{{cppNamespace}}::toStringValue(t));
+        }
+    } else {
+        QString delimiter = "";
+        if(style.indexOf("pipe") == 0) {
+            delimiter = "|";
+        } else if(style.indexOf("tsv") == 0) {
+            delimiter = "\t";
+        } else if(style.indexOf("space") == 0 || style.indexOf("ssv") == 0) {
+            delimiter = " ";
+        } else { // simple, csv
+            delimiter = ",";
+        }
+        if(delimiter != "") {
+            param.append(baseName).append("=");
+            qint32 count = 0;
+            foreach (auto t, collection) {
+                if (count > 0) {
+                    param.append(delimiter);
+                }
+                param.append(::{{cppNamespace}}::toStringValue(t));
+                count++;
+            }
+        }
+    }
+    return param;
+}
+
 {{#operations}}
 {{#operation}}
 void {{classname}}::{{nickname}}({{#allParams}}const {{{dataType}}} &{{paramName}}{{#hasMore}}, {{/hasMore}}{{/allParams}}) {
@@ -88,40 +123,14 @@ void {{classname}}::{{nickname}}({{#allParams}}const {{{dataType}}} &{{paramName
     fullPath.append(QUrl::toPercentEncoding("{{baseName}}")).append("=").append(QUrl::toPercentEncoding(::{{cppNamespace}}::toStringValue({{paramName}})));
 {{/collectionFormat}}{{#collectionFormat}}
     if ({{{paramName}}}.size() > 0) {
-        if (QString("{{collectionFormat}}").indexOf("multi") == 0) {
-            foreach ({{{baseType}}} t, {{paramName}}) {
-                if (fullPath.indexOf("?") > 0)
-                    fullPath.append("&");
-                else
-                    fullPath.append("?");
-                fullPath.append("{{{baseName}}}=").append(::{{cppNamespace}}::toStringValue(t));
-            }
-        } else if (QString("{{collectionFormat}}").indexOf("ssv") == 0) {
+        QString param = serializeCollection({{paramName}}, QString("{{baseName}}"), QString("{{style}}"));
+        if(param.size() > 0)
+        {
             if (fullPath.indexOf("?") > 0)
                 fullPath.append("&");
             else
                 fullPath.append("?");
-            fullPath.append("{{baseName}}=");
-            qint32 count = 0;
-            foreach ({{{baseType}}} t, {{paramName}}) {
-                if (count > 0) {
-                    fullPath.append(" ");
-                }
-                fullPath.append(::{{cppNamespace}}::toStringValue(t));
-            }
-        } else if (QString("{{collectionFormat}}").indexOf("tsv") == 0) {
-            if (fullPath.indexOf("?") > 0)
-                fullPath.append("&");
-            else
-                fullPath.append("?");
-            fullPath.append("{{baseName}}=");
-            qint32 count = 0;
-            foreach ({{{baseType}}} t, {{paramName}}) {
-                if (count > 0) {
-                    fullPath.append("\t");
-                }
-                fullPath.append(::{{cppNamespace}}::toStringValue(t));
-            }
+            fullPath.append(param);
         }
     }
 {{/collectionFormat}}{{/queryParams}}
@@ -215,6 +224,26 @@ void {{classname}}::{{nickname}}Callback({{prefix}}HttpRequestWorker *worker) {
         emit {{nickname}}SignalE({{#returnType}}output, {{/returnType}}error_type, error_str);
         emit {{nickname}}SignalEFull(worker, error_type, error_str);
     }
+}
+
+{{#returnType}}{{{returnType}}} {{/returnType}} {{classname}}::{{nickname}}Sync({{#allParams}}const {{{dataType}}} &{{paramName}}, {{/allParams}}bool& ok) {
+    QEventLoop loop;
+    ok = false;
+    {{#returnType}}{{{returnType}}} summary;{{/returnType}}
+
+    connect(this, &{{classname}}::{{nickname}}Signal, [&]({{#returnType}}{{{returnType}}} res{{/returnType}}) {
+        ok = true;
+        summary = res;
+        loop.quit();
+    });
+
+    connect(this, &{{classname}}::{{nickname}}SignalE, [&]({{#returnType}}{{{returnType}}}{{/returnType}}, QNetworkReply::NetworkError code, QString msg) {
+        loop.quit();
+        qDebug() << "Api error: " << code << " " << msg;
+    });
+    {{nickname}}({{#allParams}}{{paramName}}{{#hasMore}}, {{/hasMore}}{{/allParams}});
+    loop.exec();
+    return summary;
 }
 
 {{/operation}}

@@ -34,6 +34,8 @@ public:
     void abortRequests();
 {{#operations}}{{#operation}}
     void {{nickname}}({{#allParams}}const {{{dataType}}} &{{paramName}}{{#hasMore}}, {{/hasMore}}{{/allParams}});{{/operation}}{{/operations}}
+{{#operations}}{{#operation}}
+    {{#returnType}}{{{returnType}}} {{/returnType}} {{nickname}}Sync({{#allParams}}const {{{dataType}}} &{{paramName}}, {{/allParams}}bool& ok);{{/operation}}{{/operations}}
 
 private:
     QString _scheme, _host;
