@@ -231,13 +231,13 @@ void {{classname}}::{{nickname}}Callback({{prefix}}HttpRequestWorker *worker) {
     ok = false;
     {{#returnType}}{{{returnType}}} summary;{{/returnType}}
 
-    connect(this, &{{classname}}::{{nickname}}Signal, [&]({{#returnType}}{{{returnType}}} res{{/returnType}}) {
+    connect(this, &{{classname}}::{{nickname}}Signal, this, [&]({{#returnType}}{{{returnType}}} res{{/returnType}}) {
         ok = true;
         summary = res;
         loop.quit();
     });
 
-    connect(this, &{{classname}}::{{nickname}}SignalE, [&]({{#returnType}}{{{returnType}}}{{/returnType}}, QNetworkReply::NetworkError code, QString msg) {
+    connect(this, &{{classname}}::{{nickname}}SignalE, this, [&]({{#returnType}}{{{returnType}}}{{/returnType}}, QNetworkReply::NetworkError code, QString msg) {
         loop.quit();
         qDebug() << "Api error: " << code << " " << msg;
     });
